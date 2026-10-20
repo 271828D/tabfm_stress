@@ -1,0 +1,127 @@
+"""Benchmark runner: iterates over seeds × context sizes × models."""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+from typing import Any
+
+import pandas as pd
+
+from tabfm_stress.data.loader import load_data
+from tabfm_stress.data.preprocess import preprocess_context_test
+from tabfm_stress.data.splitting import split_context_test
+from tabfm_stress.evaluation.artifacts import save_predictions, save_split_info
+from tabfm_stress.evaluation.metrics import compute_metrics
+from tabfm_stress.models.zoo import MODELS, get_model
+from tabfm_stress.utils.seed import set_seed
+
+logger = logging.getLogger(__name__)
+
+
+def run_benchmark(
+    data_path: str,
+    model_names: list[str] | None = None,
+    seeds: list[int] | None = None,
+    n_context_list: list[int] | None = None,
+    feature_cols: list[str] | None = None,
+    target_col: str = "label",
+    subject_col: str = "subject_id",
+    output_dir: str = "results/",
+) -> pd.DataFrame:
+    """Run the full zero-shot benchmark.
+
+    For each seed and context size, splits the data, then evaluates
+    each model on the resulting context/test pair.
+
+    Args:
+        data_path: Path to the dataset (parquet or CSV).
+        model_names: Subset of models to run (None = all).
+        seeds: List of random seeds (default: [0, 1, 2]).
+        n_context_list: Number of context subjects per run.
+        feature_cols: Feature column names (None = auto-detect).
+        target_col: Label column name.
+        subject_col: Subject ID column name.
+        output_dir: Where to save the results CSV.
+
+    Returns:
+        DataFrame with one row per (seed, context_size, model).
+    """
+    if model_names is None:
+        model_names = list(MODELS.keys())
+    if seeds is None:
+        seeds = [0, 1, 2]
+    if n_context_list is None:
+        n_context_list = [5, 13, 26, 40, 47]
+
+    df = load_data(data_path)
+
+    if feature_cols is None:
+        feature_cols = [c for c in df.columns if c not in (target_col, subject_col)]
+
+    rows: list[dict[str, Any]] = []
+
+    for seed in seeds:
+        for n_ctx in n_context_list:
+            ctx_df, test_df, ctx_subjects, test_subjects = split_context_test(
+                df,
+                subject_col=subject_col,
+                n_context=n_ctx,
+                random_state=seed,
+            )
+            X_ctx, X_test, y_ctx, y_test = preprocess_context_test(
+                ctx_df, test_df, feature_cols, target_col
+            )
+
+            # Save split info once per (seed, n_ctx) — shared across models
+            save_split_info(
+                output_dir=output_dir,
+                seed=seed,
+                n_context=n_ctx,
+                context_subjects=ctx_subjects,
+                test_subjects=test_subjects,
+            )
+
+            for name in model_names:
+                logger.info(f"Running {name} | seed={seed} | n_ctx={n_ctx}")
+                set_seed(seed)
+                try:
+                    model = get_model(name)
+                    model.fit(X_ctx, y_ctx)
+                    y_pred = model.predict(X_test)
+                    y_proba = model.predict_proba(X_test)
+                    metrics = compute_metrics(y_test, y_pred, y_proba)
+                except Exception:
+                    logger.exception(
+                        f"Model '{name}' failed | seed={seed} | n_ctx={n_ctx}"
+                    )
+                    continue
+
+                rows.append(
+                    {
+                        "seed": seed,
+                        "n_context_subjects": n_ctx,
+                        "model": name,
+                        **metrics,
+                    }
+                )
+
+                save_predictions(
+                    output_dir=output_dir,
+                    model_name=name,
+                    seed=seed,
+                    n_context=n_ctx,
+                    y_test=y_test,
+                    y_pred=y_pred,
+                    y_proba=y_proba,
+                )
+
+    results = pd.DataFrame(rows)
+
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    out_path = out / f"benchmark_{pd.Timestamp.now():%Y%m%d_%H%M%S}.csv"
+    results.to_csv(out_path, index=False)
+    logger.info(f"Results saved to {out_path}: {len(results)} rows")
+
+    return results
