@@ -39,14 +39,18 @@ def run_benchmark(
         model_names: Subset of models to run (None = all).
         seeds: List of random seeds (default: [0, 1, 2]).
         n_context_list: Number of context subjects per run.
-        feature_cols: Feature column names (None = auto-detect).
+        feature_cols: Feature column names (None = auto-detect numeric).
         target_col: Label column name.
         subject_col: Subject ID column name.
-        output_dir: Where to save the results CSV.
+        output_dir: Where to save the results.
 
     Returns:
         DataFrame with one row per (seed, context_size, model).
     """
+    run_dir = Path(output_dir) / f"run_{pd.Timestamp.now():%Y%m%d_%H%M%S}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Output directory: {run_dir}")
+
     if model_names is None:
         model_names = list(MODELS.keys())
     if seeds is None:
@@ -57,7 +61,11 @@ def run_benchmark(
     df = load_data(data_path)
 
     if feature_cols is None:
-        feature_cols = [c for c in df.columns if c not in (target_col, subject_col)]
+        feature_cols = [
+            c
+            for c in df.select_dtypes(include="number").columns
+            if c not in (target_col, subject_col)
+        ]
 
     rows: list[dict[str, Any]] = []
 
@@ -73,9 +81,11 @@ def run_benchmark(
                 ctx_df, test_df, feature_cols, target_col
             )
 
-            # Save split info once per (seed, n_ctx) — shared across models
+            logger.info(f"Features ({len(feature_cols)}): {feature_cols}")
+            logger.info(f"X_ctx: {X_ctx.shape}, X_test: {X_test.shape}")
+
             save_split_data(
-                output_dir=output_dir,
+                output_dir=run_dir,
                 seed=seed,
                 n_context=n_ctx,
                 ctx_df=ctx_df,
@@ -92,6 +102,10 @@ def run_benchmark(
                 try:
                     model = get_model(name)
                     model.fit(X_ctx, y_ctx)
+
+                    logger.info(
+                        f"  Inference: {X_test.shape}, features={list(X_test.columns)}"
+                    )
                     y_pred = model.predict(X_test)
                     y_proba = model.predict_proba(X_test)
                     metrics = compute_metrics(y_test, y_pred, y_proba)
@@ -111,7 +125,7 @@ def run_benchmark(
                 )
 
                 save_predictions(
-                    output_dir=output_dir,
+                    output_dir=run_dir,
                     model_name=name,
                     seed=seed,
                     n_context=n_ctx,
@@ -123,10 +137,7 @@ def run_benchmark(
                 )
 
     results = pd.DataFrame(rows)
-
-    out = Path(output_dir)
-    out.mkdir(parents=True, exist_ok=True)
-    out_path = out / f"benchmark_{pd.Timestamp.now():%Y%m%d_%H%M%S}.csv"
+    out_path = run_dir / "benchmark.csv"
     results.to_csv(out_path, index=False)
     logger.info(f"Results saved to {out_path}: {len(results)} rows")
 
