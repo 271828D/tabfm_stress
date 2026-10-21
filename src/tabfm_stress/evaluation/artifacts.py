@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 
@@ -12,38 +11,42 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
-def save_split_info(
+def save_split_data(
     output_dir: str | Path,
     seed: int,
     n_context: int,
-    context_subjects: list[str],
-    test_subjects: list[str],
+    ctx_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    X_context: pd.DataFrame,
+    X_test: pd.DataFrame,
+    y_context: np.ndarray,
+    y_test: np.ndarray,
 ) -> None:
-    """Save which subjects were assigned to context vs test.
-
-    Saved once per (seed, n_context) pair — shared across all models.
-
-    Args:
-        output_dir: Base output directory.
-        seed: Random seed used for the split.
-        n_context: Number of context subjects.
-        context_subjects: Subject IDs used as context.
-        test_subjects: Subject IDs used for evaluation.
-    """
-    split_dir = Path(output_dir) / "splits"
+    """Save the full split data (context + test) for one (seed, n_context) pair."""
+    split_dir = Path(output_dir) / "splits" / f"seed_{seed}_ctx_{n_context}"
     split_dir.mkdir(parents=True, exist_ok=True)
 
-    info = {
-        "seed": seed,
-        "n_context_subjects": n_context,
-        "context_subjects": context_subjects,
-        "test_subjects": test_subjects,
-    }
-    path = split_dir / f"seed_{seed}_ctx_{n_context}.json"
-    with open(path, "w") as f:
-        json.dump(info, f, indent=2)
+    ctx_out = pd.DataFrame(
+        {
+            "split": "context",
+            "path": ctx_df["path"].values,
+            "y_true": y_context,
+        }
+    )
+    ctx_out = pd.concat([ctx_out, X_context.reset_index(drop=True)], axis=1)
 
-    logger.debug(f"Saved split info: {path}")
+    test_out = pd.DataFrame(
+        {
+            "split": "test",
+            "path": test_df["path"].values,
+            "y_true": y_test,
+        }
+    )
+    test_out = pd.concat([test_out, X_test.reset_index(drop=True)], axis=1)
+
+    full = pd.concat([ctx_out, test_out], ignore_index=True)
+    full.to_csv(split_dir / "split_data.csv", index=False)
+    logger.debug(f"Saved split data: {split_dir}")
 
 
 def save_predictions(
@@ -54,6 +57,8 @@ def save_predictions(
     y_test: np.ndarray,
     y_pred: np.ndarray,
     y_proba: np.ndarray,
+    paths: np.ndarray | None = None,
+    X_test: pd.DataFrame | None = None,
 ) -> None:
     """Save predictions for one model run.
 
@@ -65,6 +70,8 @@ def save_predictions(
         y_test: True labels.
         y_pred: Predicted labels.
         y_proba: Predicted probabilities, shape [n_samples, 2].
+        paths: Optional file paths for traceability.
+        X_test: Optional feature DataFrame to include in output.
     """
     run_dir = Path(output_dir) / model_name / f"seed_{seed}_ctx_{n_context}"
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -76,6 +83,11 @@ def save_predictions(
             "y_proba_pos": y_proba[:, 1],
         }
     )
-    pred_df.to_csv(run_dir / "predictions.csv", index=False)
+    if paths is not None:
+        pred_df.insert(0, "path", paths)
+    if X_test is not None:
+        pred_df = pd.concat([pred_df, X_test.reset_index(drop=True)], axis=1)
+
+    pred_df.to_csv(run_dir / "predictions.csv", index=False, sep=";")
 
     logger.debug(f"Saved predictions: {run_dir}")

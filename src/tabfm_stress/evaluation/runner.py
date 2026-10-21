@@ -11,7 +11,7 @@ import pandas as pd
 from tabfm_stress.data.loader import load_data
 from tabfm_stress.data.preprocess import preprocess_context_test
 from tabfm_stress.data.splitting import split_context_test
-from tabfm_stress.evaluation.artifacts import save_predictions, save_split_info
+from tabfm_stress.evaluation.artifacts import save_predictions, save_split_data
 from tabfm_stress.evaluation.metrics import compute_metrics
 from tabfm_stress.models.zoo import MODELS, get_model
 from tabfm_stress.utils.seed import set_seed
@@ -74,12 +74,16 @@ def run_benchmark(
             )
 
             # Save split info once per (seed, n_ctx) — shared across models
-            save_split_info(
+            save_split_data(
                 output_dir=output_dir,
                 seed=seed,
                 n_context=n_ctx,
-                context_subjects=ctx_subjects,
-                test_subjects=test_subjects,
+                ctx_df=ctx_df,
+                test_df=test_df,
+                X_context=X_ctx,
+                X_test=X_test,
+                y_context=y_ctx,
+                y_test=y_test,
             )
 
             for name in model_names:
@@ -114,6 +118,8 @@ def run_benchmark(
                     y_test=y_test,
                     y_pred=y_pred,
                     y_proba=y_proba,
+                    X_test=X_test,
+                    paths=test_df["path"].values,
                 )
 
     results = pd.DataFrame(rows)
