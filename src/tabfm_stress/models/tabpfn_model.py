@@ -22,20 +22,35 @@ class TabPFNModel(BaseModel):
 
     name: str = "tabpfn"
 
-    def __init__(self, **kwargs: Any) -> None:
-        """Initialize the model wrapper."""
+    def __init__(self, device: str | None = None, **kwargs: Any) -> None:
+        """Initialize the model wrapper.
+
+        Args:
+            device: Target device. None = auto-detect.
+            **kwargs: Passed to TabPFNClassifier.
+        """
+        super().__init__(device=device)
         from tabpfn import TabPFNClassifier
 
         self._model = TabPFNClassifier(**kwargs)
+        self._classes: np.ndarray | None = None
 
-    def fit(self, x: pd.DataFrame, y: np.ndarray) -> None:
+    @property
+    def classes_(self) -> np.ndarray:
+        """Class labels in the order of predict_proba columns."""
+        if self._classes is None:
+            raise RuntimeError("classes_ not available before fit().")
+        return self._classes
+
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> None:
         """Store context rows for ICL (no weight updates)."""
-        self._model.fit(x, y)
+        self._classes = np.array(sorted(y.unique()))
+        self._model.fit(X, y)
 
-    def predict(self, x: pd.DataFrame) -> np.ndarray:
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
         """Predict class labels."""
-        return self._model.predict(x)
+        return self._model.predict(X)
 
-    def predict_proba(self, x: pd.DataFrame) -> np.ndarray:
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
         """Predict class probabilities."""
-        return self._model.predict_proba(x)
+        return self._model.predict_proba(X)

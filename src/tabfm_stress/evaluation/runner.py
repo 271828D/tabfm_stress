@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import torch
+from tqdm import tqdm
 
 from tabfm_stress.data.loader import load_data
 from tabfm_stress.data.preprocess import preprocess_context_test
@@ -28,6 +30,7 @@ def run_benchmark(
     target_col: str = "label",
     subject_col: str = "subject_id",
     output_dir: str = "results/",
+    device: str = "cpu",
 ) -> pd.DataFrame:
     """Run the full zero-shot benchmark.
 
@@ -43,6 +46,7 @@ def run_benchmark(
         target_col: Label column name.
         subject_col: Subject ID column name.
         output_dir: Where to save the results.
+        device: Compute device ("cpu" or "cuda").
 
     Returns:
         DataFrame with one row per (seed, context_size, model).
@@ -50,6 +54,17 @@ def run_benchmark(
     run_dir = Path(output_dir) / f"run_{pd.Timestamp.now():%Y%m%d_%H%M%S}"
     run_dir.mkdir(parents=True, exist_ok=True)
     logger.info(f"Output directory: {run_dir}")
+
+    if device == "cuda":
+        if not torch.cuda.is_available():
+            logger.warning(
+                "device='cuda' requested but no CUDA device found — falling back to CPU"
+            )
+            device = "cpu"
+        else:
+            logger.info(f"Device: {torch.cuda.get_device_name(0)}")
+    else:
+        logger.info(f"Device: {device}")
 
     if model_names is None:
         model_names = list(MODELS.keys())
@@ -67,7 +82,13 @@ def run_benchmark(
             if c not in (target_col, subject_col)
         ]
 
+    # Issue 7: log feature info once, outside the loop
+    logger.info(f"Features ({len(feature_cols)}): {feature_cols}")
+
     rows: list[dict[str, Any]] = []
+
+    total_trials = len(seeds) * len(n_context_list) * len(model_names)
+    pbar = tqdm(total=total_trials, desc="Benchmark", unit="trial")
 
     for seed in seeds:
         for n_ctx in n_context_list:
@@ -81,7 +102,6 @@ def run_benchmark(
                 ctx_df, test_df, feature_cols, target_col
             )
 
-            logger.info(f"Features ({len(feature_cols)}): {feature_cols}")
             logger.info(f"X_ctx: {X_ctx.shape}, X_test: {X_test.shape}")
 
             save_split_data(
@@ -100,12 +120,9 @@ def run_benchmark(
                 logger.info(f"Running {name} | seed={seed} | n_ctx={n_ctx}")
                 set_seed(seed)
                 try:
-                    model = get_model(name)
+                    # Issue 5: forward device to model construction
+                    model = get_model(name, device=device)
                     model.fit(X_ctx, y_ctx)
-
-                    logger.info(
-                        f"  Inference: {X_test.shape}, features={list(X_test.columns)}"
-                    )
                     y_pred = model.predict(X_test)
                     y_proba = model.predict_proba(X_test)
                     metrics = compute_metrics(y_test, y_pred, y_proba)
@@ -113,6 +130,7 @@ def run_benchmark(
                     logger.exception(
                         f"Model '{name}' failed | seed={seed} | n_ctx={n_ctx}"
                     )
+                    pbar.update(1)  # Issue 3
                     continue
 
                 rows.append(
@@ -124,17 +142,28 @@ def run_benchmark(
                     }
                 )
 
-                save_predictions(
-                    output_dir=run_dir,
-                    model_name=name,
-                    seed=seed,
-                    n_context=n_ctx,
-                    y_test=y_test,
-                    y_pred=y_pred,
-                    y_proba=y_proba,
-                    X_test=X_test,
-                    paths=test_df["path"].values,
-                )
+                # Issue 4: save_predictions guarded inside its own try
+                try:
+                    paths = (
+                        test_df["path"].values if "path" in test_df.columns else None
+                    )
+                    save_predictions(
+                        output_dir=run_dir,
+                        model_name=name,
+                        seed=seed,
+                        n_context=n_ctx,
+                        y_test=y_test,
+                        y_pred=y_pred,
+                        y_proba=y_proba,
+                        X_test=X_test,
+                        paths=paths,
+                    )
+                except Exception:
+                    logger.exception(f"Failed to save predictions for '{name}'")
+
+                pbar.update(1)  # Issue 3
+
+    pbar.close()
 
     results = pd.DataFrame(rows)
     out_path = run_dir / "benchmark.csv"

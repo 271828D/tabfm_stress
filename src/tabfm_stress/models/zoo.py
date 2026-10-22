@@ -15,11 +15,11 @@ from tabfm_stress.models.tabpfn_model import TabPFNModel
 
 logger = logging.getLogger(__name__)
 
-MODELS: dict[str, type[BaseModel]] = {
+MODELS: dict[str, type[BaseModel]] = {  # ignore[type-abstract]
     "tabpfn": TabPFNModel,
     "tabicl": TabICLModel,
     "tabdpt": TabDPTModel,
-    "tabfm": TabFMModel,
+    "tabfm": TabFMModel,  # type: ignore[type-abstract]
     "causilo": CausiloModel,
 }
 

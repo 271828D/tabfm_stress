@@ -22,14 +22,29 @@ class TabDPTModel(BaseModel):
 
     name: str = "tabdpt"
 
-    def __init__(self, **kwargs: Any) -> None:
-        """Initialize the model wrapper."""
+    def __init__(self, device: str | None = None, **kwargs: Any) -> None:
+        """Initialize the model wrapper.
+
+        Args:
+            device: Target device. None = auto-detect.
+            **kwargs: Passed to TabDPTClassifier.
+        """
+        super().__init__(device=device)
         from tabdpt import TabDPTClassifier
 
         self._model = TabDPTClassifier(**kwargs)
+        self._classes: np.ndarray | None = None
 
-    def fit(self, X: pd.DataFrame, y: np.ndarray) -> None:
+    @property
+    def classes_(self) -> np.ndarray:
+        """Class labels in the order of predict_proba columns."""
+        if self._classes is None:
+            raise RuntimeError("classes_ not available before fit().")
+        return self._classes
+
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> None:
         """Store context and build retrieval index (no weight updates)."""
+        self._classes = np.array(sorted(y.unique()))
         self._model.fit(X, y)
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:

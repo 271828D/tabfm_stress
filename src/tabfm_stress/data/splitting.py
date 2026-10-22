@@ -1,6 +1,9 @@
 """Subject-aware splitting utilities."""
 
+from __future__ import annotations
+
 import logging
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -13,7 +16,7 @@ def split_context_test(
     subject_col: str = "subject_id",
     n_context: int = 5,
     random_state: int = 42,
-) -> tuple[pd.DataFrame, pd.DataFrame, list[str], list[str]]:
+) -> tuple[pd.DataFrame, pd.DataFrame, list[Any], list[Any]]:
     """Split DataFrame into context and test sets at subject level.
 
     Randomly selects n_context subjects for context; all remaining
@@ -26,13 +29,18 @@ def split_context_test(
         random_state: Seed for reproducibility.
 
     Returns:
-        Tuple of (context_df, test_df).
+        Tuple of (context_df, test_df, context_subjects, test_subjects).
 
     Raises:
-        ValueError: If subject_col is missing or n_context >= total subjects.
+        ValueError: If subject_col is missing, n_context <= 0,
+            or n_context >= total subjects.
     """
     if subject_col not in df.columns:
         raise ValueError(f"Column '{subject_col}' not found in DataFrame.")
+
+    # Issue 10: guard against non-positive context size
+    if n_context <= 0:
+        raise ValueError(f"n_context must be > 0, got {n_context}.")
 
     subjects = df[subject_col].unique()
     total = len(subjects)
@@ -40,13 +48,17 @@ def split_context_test(
     if n_context >= total:
         raise ValueError(f"n_context ({n_context}) must be < total subjects ({total}).")
 
-    rng = np.random.RandomState(random_state)
+    # Issue 11: use modern Generator API
+    rng = np.random.default_rng(random_state)
     chosen = rng.choice(subjects, size=n_context, replace=False)
 
-    remaining = np.setdiff1d(subjects, chosen)
+    # Issue 12: preserve original DataFrame order (no sorting)
+    is_context = df[subject_col].isin(chosen)
+    context_df = df[is_context].reset_index(drop=True)
+    test_df = df[~is_context].reset_index(drop=True)
 
-    context_df = df[df[subject_col].isin(chosen)].reset_index(drop=True)
-    test_df = df[~df[subject_col].isin(chosen)].reset_index(drop=True)
+    context_subjects = context_df[subject_col].unique().tolist()
+    test_subjects = test_df[subject_col].unique().tolist()
 
     logger.info(
         f"Split: context={context_df[subject_col].nunique()} subjects "
@@ -55,4 +67,4 @@ def split_context_test(
         f"({len(test_df)} rows)"
     )
 
-    return context_df, test_df, chosen.tolist(), remaining.tolist()
+    return context_df, test_df, context_subjects, test_subjects

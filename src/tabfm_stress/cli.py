@@ -7,8 +7,6 @@ import logging
 import os
 import sys
 
-os.environ["CUDA_VISIBLE_DEVICES"] = ""  # Force CPU-only
-
 
 def main() -> None:
     """Entry point for the tabfm-stress CLI."""
@@ -76,6 +74,12 @@ def main() -> None:
         default="results/",
         help="Output directory (default: results/)",
     )
+    run.add_argument(
+        "--device",
+        choices=["cpu", "cuda"],
+        default="cpu",
+        help="Compute device (default: cpu)",
+    )
 
     args = parser.parse_args()
 
@@ -84,11 +88,25 @@ def main() -> None:
         sys.exit(1)
 
     if args.cmd == "run":
+        # Issue 1: set CUDA env var only at runtime, not on import
+        if args.device == "cpu":
+            os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
         from tabfm_stress.evaluation.runner import run_benchmark
 
-        model_names = args.models.split(",") if args.models != "all" else None
-        feature_cols = args.feature_cols.split(",") if args.feature_cols else None
+        # Issue 2: strip whitespace from comma-separated values
+        model_names = (
+            [m.strip() for m in args.models.split(",")]
+            if args.models != "all"
+            else None
+        )
+        feature_cols = (
+            [c.strip() for c in args.feature_cols.split(",")]
+            if args.feature_cols
+            else None
+        )
 
+        # Issue 6: forward device to runner
         run_benchmark(
             data_path=args.data,
             model_names=model_names,
@@ -98,6 +116,7 @@ def main() -> None:
             target_col=args.target_col,
             subject_col=args.subject_col,
             output_dir=args.output,
+            device=args.device,
         )
 
 
