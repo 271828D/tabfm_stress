@@ -45,12 +45,12 @@ class TabDPTModel(BaseModel):
     def fit(self, X: pd.DataFrame, y: np.ndarray) -> None:
         """Store context and build retrieval index (no weight updates)."""
         self._classes = np.array(sorted(np.unique(y)))
-        self._model.fit(X.values, y)
+        self._model.fit(X.values.copy(), y)
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
         """Predict class labels."""
-        return self._model.predict(X.values)
+        return self._model.predict(X.values.copy())
 
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
         """Predict class probabilities."""
-        return self._model.predict_proba(X.values)
+        return self._model.predict_proba(X.values.copy())
