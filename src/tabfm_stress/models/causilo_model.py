@@ -42,9 +42,9 @@ class CausiloModel(BaseModel):
             raise RuntimeError("classes_ not available before fit().")
         return self._classes
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> None:
+    def fit(self, X: pd.DataFrame, y: np.ndarray) -> None:
         """Store context rows for ICL (no weight updates)."""
-        self._classes = np.array(sorted(y.unique()))
+        self._classes = np.array(sorted(np.unique(y)))
         self._model.fit(X, y)
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:

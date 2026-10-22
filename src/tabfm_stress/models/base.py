@@ -35,7 +35,7 @@ class BaseModel(ABC):
         ...
 
     @abstractmethod
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> None:
+    def fit(self, X: pd.DataFrame, y: np.ndarray) -> None:
         """Store context for in-context learning (no weight updates).
 
         Args:

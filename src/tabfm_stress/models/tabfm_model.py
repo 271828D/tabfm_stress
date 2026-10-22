@@ -36,6 +36,7 @@ class TabFMModel(BaseModel):
             batch_size: Number of test rows per forward pass during predict.
             **kwargs: Additional parameters passed to TabFMClassifier.
         """
+        super().__init__(device=device)
         from tabfm import TabFMClassifier
         from tabfm import tabfm_v1_0_0_pytorch as tabfm_v1_0_0
 
@@ -44,9 +45,18 @@ class TabFMModel(BaseModel):
             self._model = self._model.to(device)
         self._clf = TabFMClassifier(model=self._model, **kwargs)
         self._batch_size = batch_size
+        self._classes: np.ndarray | None = None
+
+    @property
+    def classes_(self) -> np.ndarray:
+        """Class labels in the order of predict_proba columns."""
+        if self._classes is None:
+            raise RuntimeError("classes_ not available before fit().")
+        return self._classes
 
     def fit(self, X: pd.DataFrame, y: np.ndarray) -> None:
         """Store context rows for ICL (no weight updates)."""
+        self._classes = np.array(sorted(np.unique(y)))
         self._clf.fit(X, y)
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
