@@ -12,6 +12,22 @@ from tabfm_stress.models.base import BaseModel
 
 logger = logging.getLogger(__name__)
 
+# ── Module-level weight cache (paid once per process) ──────────────────────
+_tabfm_weights: Any = None
+
+
+def _load_tabfm_weights(device: str | None = None) -> Any:
+    """Load TabFM weights once; return cached reference on subsequent calls."""
+    global _tabfm_weights
+    if _tabfm_weights is None:
+        from tabfm import tabfm_v1_0_0_pytorch as tabfm_v1_0_0
+
+        _tabfm_weights = tabfm_v1_0_0.load(model_type="classification")
+        logger.info("TabFM weights loaded.")
+    if device is not None:
+        _tabfm_weights = _tabfm_weights.to(device)
+    return _tabfm_weights
+
 
 class TabFMModel(BaseModel):
     """TabFM: Hybrid-Attention ICL transformer (24 layers, 400M params).
@@ -38,11 +54,8 @@ class TabFMModel(BaseModel):
         """
         super().__init__(device=device)
         from tabfm import TabFMClassifier
-        from tabfm import tabfm_v1_0_0_pytorch as tabfm_v1_0_0
 
-        self._model = tabfm_v1_0_0.load(model_type="classification")
-        if device is not None:
-            self._model = self._model.to(device)
+        self._model = _load_tabfm_weights(device)
         self._clf = TabFMClassifier(model=self._model, **kwargs)
         self._batch_size = batch_size
         self._classes: np.ndarray | None = None
