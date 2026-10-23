@@ -16,6 +16,7 @@ dependencies = [
     "tabfm[pytorch]>=1.0.1",
     "causilo>=1.0.3",
     "scikit-learn>=1.9.1",
+    "structured-data-models",
 ]
 
 [dependency-groups]
@@ -71,3 +72,6 @@ strict = true
 disallow_any_generics = true
 namespace_packages = true
 ignore_missing_imports = true
+
+[tool.uv.sources]
+structured-data-models = { git = "https://github.com/NVIDIA/structured-data-models.git" }
