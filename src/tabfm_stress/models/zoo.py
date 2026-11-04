@@ -9,6 +9,7 @@ from typing import Any
 from tabfm_stress.models.base import BaseModel
 from tabfm_stress.models.causilo_model import CausiloModel
 from tabfm_stress.models.kumo_model import KumoModel
+from tabfm_stress.models.lightgbm_model import LightGBMModel
 from tabfm_stress.models.tabdpt_model import TabDPTModel
 from tabfm_stress.models.tabfm_model import TabFMModel
 from tabfm_stress.models.tabicl_model import TabICLModel
@@ -23,6 +24,7 @@ MODELS: dict[str, type[BaseModel]] = {
     "tabfm": TabFMModel,
     "causilo": CausiloModel,
     "kumo": KumoModel,
+    "lightgbm": LightGBMModel,
 }
 
 

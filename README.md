@@ -52,6 +52,7 @@ uv run tabfm-stress run \
 - **TabICL** — `tabicl`
 - **Causilo** — `causilo`
 - **TabFM** — `tabfm`
+- **LightGBM** — `lightgbm`
 
 ## Development
 
