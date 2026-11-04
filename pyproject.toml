@@ -17,6 +17,7 @@ dependencies = [
     "causilo>=1.0.3",
     "scikit-learn>=1.9.1",
     "structured-data-models",
+    "lightgbm>=4.7.0",
 ]
 
 [dependency-groups]

@@ -161,6 +161,11 @@ def run_benchmark(
                 except Exception:
                     logger.exception(f"Failed to save predictions for '{name}'")
 
+                # Save model artifact if the wrapper supports it
+                if hasattr(model, "save"):
+                    model_path = run_dir / f"{name}_seed{seed}_ctx{n_ctx}.pkl"
+                    model.save(model_path)
+
                 pbar.update(1)  # Issue 3
 
     pbar.close()
