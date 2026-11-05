@@ -85,7 +85,7 @@ class LightGBMModel(BaseModel):
         Returns:
             Predicted labels (shape [n_samples,]).
         """
-        return self._model.predict(X)
+        return self._model.predict(X).astype(int)
 
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
         """Predict class probabilities.

@@ -49,7 +49,7 @@ class TabDPTModel(BaseModel):
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
         """Predict class labels."""
-        return self._model.predict(X.values.copy())
+        return self._model.predict(X.values.copy()).astype(int)
 
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
         """Predict class probabilities."""

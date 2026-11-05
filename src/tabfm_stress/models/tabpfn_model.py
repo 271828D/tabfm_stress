@@ -49,7 +49,7 @@ class TabPFNModel(BaseModel):
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
         """Predict class labels."""
-        return self._model.predict(X)
+        return self._model.predict(X).astype(int)
 
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
         """Predict class probabilities."""
