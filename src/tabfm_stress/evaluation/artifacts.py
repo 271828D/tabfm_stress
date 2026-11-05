@@ -78,8 +78,8 @@ def save_predictions(
 
     pred_df = pd.DataFrame(
         {
-            "y_true": y_test,
-            "y_pred": y_pred,
+            "y_true": y_test.astype(int),
+            "y_pred": y_pred.astype(int),
             "y_proba_pos": y_proba[:, 1],
         }
     )

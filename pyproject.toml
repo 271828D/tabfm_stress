@@ -27,6 +27,7 @@ dev = [
     "pre-commit",
     "pytest",
     "jupyter>=1.1.1",
+    "polars>=2.1.0",
 ]
 
 [project.scripts]

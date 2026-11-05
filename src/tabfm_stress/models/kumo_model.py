@@ -77,7 +77,7 @@ class KumoModel(BaseModel):
         if classes is None:
             raise RuntimeError("fit() must be called before predict().")
         proba = self.predict_proba(X)
-        return classes[np.argmax(proba, axis=1)]
+        return classes[np.argmax(proba, axis=1)].astype(int)
 
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
         """Predict class probabilities (single forward pass)."""
